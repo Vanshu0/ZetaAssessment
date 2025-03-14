@@ -1,0 +1,176 @@
+                   Aryan Assesment
+                   Q3(Rate Limiting)
+
+Task1
+ There are different approaches to implement to rate limiting. We are going to talk about only 2 of them. We will be talking about token bucket Algorithm which is implemented by stripe. Also another one is leaky bucket, we will be also talking about it.
+ Token Bucket Algo:
+    The Token Bucket analogy is very simple. It's all about a bucket and tokens in it. Let's discuss it step by step.
+1.	Picture a bucket in your mind.
+2.	Fill the buckets with tokens at a constant rate.
+3.	When a packet arrives, check if there is any token in the bucket.
+4.	If there was any token left, remove one from the bucket and forward the packet. If the bucket was empty, simply drop the packet.
+We will be talking about its code implementation where we will also talk about different terminology used in it.
+ 
+
+Leaky Bucket Algo:
+The leaky bucket algorithm is a method of congestion control where multiple packets are stored temporarily. These packets are sent to the network at a constant rate that is decided between the sender and the network. This algorithm is used to implement congestion control through traffic shaping in data networks.
+Consider a bucket with a small hole at the bottom. Now imagine that water is poured into the bucket at random intervals. At each interval, the amount of water poured into the bucket is not fixed. Now it does not matter how much water is inside the bucket, the water comes out at a constant rate from the hole.
+•	The rate at which water leaks (called the leak rate) is independent of the amount of water inside the bucket.
+•	If the bucket becomes full, the water poured will be lost.
+The same idea of the leaky bucket can be applied to the data packets.
+•	Consider that, each network interface has a leaky bucket.
+•	Now, when the sender wants to transmit packets, the packets are thrown into the bucket. These packets get accumulated in the bucket present at the network interface.
+•	If the bucket is full, the packets are discarded by the buckets and are lost.
+•	This bucket will leak at a constant rate. This means that the packets will be transmitted to the network at a constant rate. This constant rate is known as the Leak Rate or the Average Rate.
+•	In this way, bursty traffic is converted into smooth, fixed traffic by the leaky bucket.
+•	Queuing and releasing the packets at different intervals help in reducing network congestion and increasing overall performance.
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Now I will be writing the implementation of token Bucket algo
+
+ 
+import java.util.concurrent.*;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+
+class TokenBucket {
+    private int availableTokens;
+    private final int bucketCapacity;
+    private long lastRefillTimestamp;
+    private static final int TOKENS_PER_SECOND = 5; // Refill rate: 5 tokens per second
+
+    public TokenBucket(int bucketCapacity) {
+        this.availableTokens = bucketCapacity; // Start with a full bucket
+        this.bucketCapacity = bucketCapacity;
+        this.lastRefillTimestamp = System.nanoTime();
+    }
+
+    private synchronized void refillTokens() {
+        long currentTime = System.nanoTime();
+        long elapsedTime = currentTime - lastRefillTimestamp;
+        int tokensToAdd = (int) (TimeUnit.NANOSECONDS.toSeconds(elapsedTime)) * TOKENS_PER_SECOND;
+
+        if (tokensToAdd > 0) {
+            availableTokens = Math.min(bucketCapacity, availableTokens + tokensToAdd);
+            lastRefillTimestamp = currentTime;
+        }
+    }
+
+    public synchronized boolean tryConsumeToken() {
+        refillTokens();
+        if (availableTokens > 0) {
+            availableTokens--;
+            return true;
+        }
+        return false;
+    }
+}
+
+class RateLimiter {
+    private static final int MAX_TOKENS = 5; // Maximum 5 requests per second
+    private final ConcurrentHashMap<String, TokenBucket> userTokenBuckets = new ConcurrentHashMap<>();
+
+    public boolean isRequestAllowed(String userId) {
+        return userTokenBuckets.computeIfAbsent(userId, k -> new TokenBucket(MAX_TOKENS)).tryConsumeToken();
+    }
+}
+
+public class Main {
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
+
+    public static void main(String[] args) {
+        RateLimiter rateLimiter = new RateLimiter();
+        ExecutorService executorService = Executors.newFixedThreadPool(10);
+
+        // Simulate multiple users sending requests
+        for (int i = 0; i < 20; i++) {
+            final String userId = "User" + (i % 4); // Four different users: User0, User1, User2, User3
+            executorService.execute(() -> {
+                for (int j = 0; j < 10; j++) {
+                    String timestamp = LocalTime.now().format(TIME_FORMATTER);
+                    if (rateLimiter.isRequestAllowed(userId)) {
+                        System.out.println(timestamp + " " + userId + " - Request allowed");
+                    } else {
+                        System.out.println(timestamp + " " + userId + " - Request denied");
+                    }
+                    try {
+                        Thread.sleep(200); // Simulate time gap between requests
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            });
+        }
+
+        executorService.shutdown();
+    }
+}
+The result of this code is:
+ 
+
+We can clearly see that each user can only make 5 request per second rest request denied. Also 4 users are present in it.
+
+1. TokenBucket Class
+This class implements the token bucket algorithm, which is used to control the rate of requests.
+•	Fields:
+o	availableTokens: Number of tokens currently available.
+o	bucketCapacity: Maximum tokens the bucket can hold (here, 5 tokens).
+o	lastRefillTimestamp: The last time the bucket was refilled.
+o	TOKENS_PER_SECOND: The refill rate (5 tokens per second).
+•	Constructor:
+o	Initializes the bucket with a full capacity and sets the initial timestamp using System.nanoTime().
+•	refillTokens() Method:
+o	Calculates the elapsed time since the last refill.
+o	Converts the elapsed nanoseconds to seconds, then computes how many tokens to add.
+o	Adds tokens up to the bucket's capacity.
+o	Updates the lastRefillTimestamp to the current time.
+•	tryConsumeToken() Method:
+o	Calls refillTokens() to ensure tokens are updated.
+o	If at least one token is available, it decrements the token count and returns true (request allowed).
+o	If no tokens are available, it returns false (request denied).
+2. RateLimiter Class
+This class uses a ConcurrentHashMap to maintain a separate token bucket for each user.
+•	Fields:
+o	MAX_TOKENS: Maximum number of tokens for each user’s bucket (5 tokens per second).
+o	userTokenBuckets: Maps a user ID (String) to its corresponding TokenBucket.
+•	isRequestAllowed(String userId) Method:
+o	Uses computeIfAbsent() to create a new token bucket for the user if one doesn’t exist.
+o	Calls tryConsumeToken() on the user’s token bucket to decide if the request can proceed.
+3. Main Class (Entry Point)
+This is the main execution class of the program.
+•	TIME_FORMATTER:
+o	Formats the current time into a readable format (HH:mm:ss.SSS).
+•	main Method:
+o	Creates an instance of RateLimiter.
+o	Sets up an ExecutorService with a thread pool of 10 threads to simulate concurrency.
+•	Simulation Loop:
+o	A loop (running 20 times) simulates multiple users sending requests.
+o	The user ID is determined by "User" + (i % 4), which creates 4 distinct users: User0, User1, User2, and User3.
+o	For each iteration, a task is submitted to the thread pool that: 
+	Makes 10 requests (each separated by a 200-millisecond pause).
+	Retrieves the current time and prints whether the request was allowed or denied based on the rate limiter's check.
+•	Shutting Down the Executor:
+o	After submitting all tasks, executorService.shutdown() is called to stop accepting new tasks and eventually shut down the thread pool once all tasks complete.
+
+
+DATA STRUCTURE USED
+     I have basically use HashMap as a Data Structure. Concurrent HashMap basically uses number of requests made per user.
+
+Trade-Off between Token Bucket and Leaky Bucket
+Token bucket is basically based on the principle that It will deny request only when bucket is empty and no token is present in it while leaky bucket will deny request while bucket is full.
+One of the major trade-off is on latency. Token Bucket is having lower latency while leaky bucket is having higher latency due to fixed rate.
+One of the major advantage with token bucket is that It is much more simpler to implement than leaky bucket.
+When we want traffic to be smooth then leaky bucket is preferred while for burst type of traffic token bucket is preferred.

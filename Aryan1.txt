@@ -1,0 +1,49 @@
+             Aryan’s Assessment
+             Q1(Invisible Bug)
+Task.1(Reasons)
+Here are three potential reasons for the decline in fraud detection accuracy and the unpredictable response times: 
+(a). Feature Extraction Corruption
+A bug in the feature engineering pipeline (e.g., processing transaction history, location, or device fingerprinting) introduced errors like missing values, incorrect encodings, or corrupted data, degrading the model’s predictions and slowing down processing.
+(b). API Latency and Accuracy Drop
+The system depends on an external service, like a geolocation API or device fingerprinting service, which, after deployment, began to provide slower or less accurate responses due to its own issues, affecting both latency and accuracy. 
+     (c). Overzealous Caching or Stale Data
+A caching mechanism may have been introduced or misconfigured, resulting in the API serving outdated fraud scores or feature data instead of real-time results, leading to inaccurate predictions and inconsistent response times.
+
+
+
+Task.2(Debugging)
+A: Feature Extraction Corruption
+Step-by-Step Debugging:
+(a).Log Feature Data: Capture raw input data, such as transactions and locations, along with processed features like normalized values and encoded fingerprints from before and after deployment.
+(b). Compare Outputs: Validate the processed features against expected formats, ensuring there are no nulls and that values fall within correct ranges, using assertions or a data diff tool.
+(c). Trace Pipeline Code: Review recent changes in the ETL or preprocessing scripts by using Git diff and check library versions for any breaking changes, such as those in pandas or numpy.
+(d). Test in Isolation: Execute the pipeline against a small data set offline and verify the outputs against a known good state, referencing pre-deployment logs.
+(e). Resolution: Repair the bug by rolling back a faulty update or handling edge cases, reprocess the data, and redeploy the fixed pipeline.
+
+B: API Latency and Accuracy Drop
+ Step-by-Step Debugging:
+(a). Monitor External Calls: Post-deployment, I will look at the logs for the response time, error codes, and payload sizes from the 3rd party API.
+
+(b). Test Independently: Send test requests to the external service, using a tools like Postman or curl, and then compare latency and accuracy to after taking measurements.
+(c). Contact Provider: Visit the third-party API’s status page or changelog for outages, rate limits, and datal quality problemes that were reported.
+(d). Fallback Test: I can temporarily simulate the external API with static data (e.g., cached responses) and see if the system’s performance improves.
+(e). Resolution: I can also switch to a backup provider, implement retry logic with exponential backoff, or cache reliable responses locally until the service stabilizes.
+C: Overzealous Caching or Stale Data
+Step-by-Step Debugging:
+(a). Inspect Cache Config: Inspect caching layers like Redis, Memcached  TTL ,eviction policies and key patterns,.
+(b). Log Cache Behavior: logs to track cache hits or cache misses, and the age of cached data (last updated timestamp etc).
+(c). Simulate Traffic: Request generation control (some scripting), response control through cache and compare response w/ vs w/o cache and compare freshness.
+(d). Force Refresh: set a shorter TTL and observe if accuracy and latency return to normal or clear the cache.
+(e). Resolution: Please update the cache invalidation( e.g the cache should be invalidated when the transaction get close) or disable the cache in crush components on the transaction in run-time.
+
+Task.3(Additional One Feature to be Added)
+User Behavioral Biometrics Description: Implement a new feature to record how users interact with the banking platform while completing transactions. This involves analyzing keystroke dynamics, mouse movement curves, and gestures made on touchscreen devices. We can create a signature for each user using behavioral biometrics.
+Why It Helps: Real humans interact with web assets differently than fraudsters, who generally write the most scripts and use pilfered credentials. These solutions perform various tasks by training the model to detect anomalies in behavioral biometrics and analyzing transaction history.
+Implementation: You can also still do this by collecting data using a client-side JavaScript snippet for web applications or using an SDK for mobile applications. Combine the data into a feature vector, potentially including metrics like average typing speed and click frequency, by adding them into the input layer of the model. 
+Impact: This could catch sophisticated fraud attempts (e.g., account takeovers) that mimic transaction patterns but fail to replicate user behavior, potentially boosting accuracy. 
+Explanation of Approach: I selected these new reasons to highlight specific failure points in a production AI system: data processing errors (pipeline corruption), external dependencies (third-party APIs), and optimization missteps (caching). Debugging is an iterative procedure that starts with observations (including log and configuration checking), follows by via isolates via test and differences, and end with verification (simulation) to see if the issue has been fixed. Alternatively, I even propose a new feature, that has been built based on current known implementation of the models and it would make a lot of sense, with 100 PAs league input currently. The answers need to be clear and practical, so instead of generic steps we tie every step to what would happen in a real-word troubleshooting scenario.
+
+
+
+
+

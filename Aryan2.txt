@@ -1,0 +1,274 @@
+         Aryan’s Assessment
+         Q2(Scalable Banking Api)
+Task-1
+1.Get Account Balance (GET /accounts/{accountId }/balance)
+•	Retrieves current balance.
+•	Get is used because we are fetching data from DB with AccountId. 
+•	Version is used for handling multiple request
+•	Example response:
+     {  
+          "balance": 350.00,
+            "version": 12
+      } this is Json object 
+2.Post Account (Debit, Credit) (POST/accounts/ { accountId }/ transactions)
+•	 Allow credit or deposit into Account.
+•	In the Debit/Withdraw we are posting into Db,that is why post request is made.
+•	Headers:
+           Idempotency-Key: abc123 It is basically used to handle multiple request from same transaction-id
+•	Example request:
+     {      
+        "moneyWithdraw/Deposit": 49,
+        "typeOfTransaction": “Deposit”,
+         “expectedversion”:7
+        
+} this is Json object
+•	Example response:
+     {
+             "id": "tpn131",
+           "type": "Deposit",
+          "amount": 100.00,
+        "newBalance": 400.00
+        "newVersion": "8",
+        "timestamp": "2025-05-02T10:24:02Z",
+     } this is Json object
+3.Error Handling (Debit, Credit) (POST/accounts/{ accountId }/ transactions)
+   (A) Balance is less:
+•	It occurs when current balance <balance needed to be withdraw
+Status code can be 422 
+Example response:
+{
+       “error”: “Insufficient Balance”
+} this is Json object
+
+(B)Handle concurrent requests:
+•	 Another transaction modified the balance before this request.
+•	Status code can be 409
+•	 Example response:
+ {
+  "error": "Version mismatch",
+  "CurrentVersion": 6
+} 
+(C)Server Crashes:
+•	 Server crashes before request.
+•	Status code can be 408
+•	 Example response:
+ {
+  "error": "Server Crashes",
+  "CurrentVersion": 5
+} 
+
+   
+How Atomicity is followed 
+•	Atomicity basically means either all the operations in a transaction occurs or none of them occurs.
+•	Suppose we are trying to find the money in account, we are making a get request to fetch the money in account. if server crashes during before get request, it will return clear error msg.
+•	If any deposit/withdraw request is made ,it will return an error msg if server crashes before making a request or it fulfil the corresponding request.
+How to Handle Concurrent request
+•	Version is basically used to handle concurrent request in api design.
+Before updating the balance, the API checks if the expected Version matches the current version in the database. 
+•	If another transaction has already modified the balance, the version number will have changed. 
+•	In this case, the API rejects the transaction and asks the client to fetch the latest balance and retry.
+•	One of the thing I have used is Idempotency-Key. 
+•	If a request is retried due to network issues, it should not create duplicate transactions.
+•	The server will going to check if transaction of same idempotency key is processed or not.
+•	If a duplicate request is detected, the API returns the same response instead of reprocessing.
+•	Duplicate Transaction Handling: If the same request is sent again with the same Idempotency-Key, the API responds:
+     {
+  "error": "Duplicate transaction",
+  "transactionId": "txn131"
+  }
+ 
+
+
+
+Database Schema
+We will be using Sql databases here because of mainly strong consistency required and also locking is more efficient in sql db.
+
+Db design
+Accounts table will store info of a account while transactions store the info of transaction
+
+Db Schema
+CREATE TABLE accounts (
+    accountId SERIAL PRIMARY KEY,
+    balance DECIMAL(18,2) NOT NULL CHECK (balance >= 0),
+    version INT NOT NULL CHECK (version > 0)
+);
+
+CREATE TABLE transactions (
+    transactionId SERIAL PRIMARY KEY,
+    accountId INT NOT NULL REFERENCES accounts(accountId) ON DELETE CASCADE,
+    type VARCHAR(10) NOT NULL CHECK (type IN ('debit', 'credit')),
+    amount DECIMAL(18,2) NOT NULL CHECK (amount > 0),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    idempotencyKey VARCHAR(255) NULL, -- Explicitly allow NULL
+
+    -- Prevent duplicate idempotencyKey per account
+    CONSTRAINT unique_idempotency_per_account UNIQUE (accountId, idempotencyKey)
+);
+
+Now we need to ensure db consistency, So we will talk about it
+(a)One of the major thing is that if we are making get request,then consistency will be maintained because no changes is made to db.
+(b)however if post request is made,consistency may not be maintained .We can use a db transaction , if fails db will come back or roll back to previous state. 
+(c)In the concurrent request api, If a concurrent transaction modifies the balance before this request then roll back take place.
+(d) If the server crashes mid-transaction, the database automatically rolls back;
+ 
+Race Conditions	Version mismatch check
+Insufficient Funds	Checks before withdrawal
+Rollback on Failure	Uses ROLLBACK
+Concurrency	Uses version and FOR UPDATE
+Atomicity	Uses BEGIN TRANSACTION and COMMIT
+
+
+This table and sql code clearly shows whole procedure while a transaction take places.Also how different property is implemented is shown in the table itself.
+
+
+
+
+
+
+
+
+Optimisations for High Performance
+Use Connection Polling:Every request creates a new DB connection, which is slow and expensive.If you have high concurrency, DB connections become the bottleneck. Use a connection pooler like PgBouncer to reuse database connections.
+
+Use CQRS: Our system handles both reads (balance checks) and writes (transactions) on the same database. This blocks high-throughput transactions. Separate read operations from write operations: Reads go to a cached or read-optimized database (e.g., ElasticSearch, Redis, or a read replica). Writes go to the main transaction database.
+
+Now we talk about basic Api implementation for withdrawing the money and ensure concurrent safety 
+First I will give you photos of code and result and actual code
+
+1.Api.py
+ 
+ 
+  
+
+
+
+
+Photo 1: It shows reset_balance.py where this code is basically used to reset balance.
+Photo 2:It show basically 10 concurrent request from a single account.
+Photo3 & 4: it basically give the actual code of implementation of api and ensure concurrent safety 
+
+Now result is  
+
+
+This is api.py
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+import threading
+import locale
+locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+
+app = Flask(__name__)
+
+# Database configuration (SQLite for simplicity, can be replaced with PostgreSQL/MySQL)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///bank.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+balance_lock = threading.Lock()
+class Account(db.Model):
+    id = db.Column(db.String(10), primary_key=True)
+    balance = db.Column(db.Float, nullable=False, default=1000.00)
+
+with app.app_context():
+    db.create_all()
+    if not Account.query.filter_by(id="12345").first():
+        db.session.add(Account(id="12345", balance=1000.00))
+        db.session.commit()
+
+@app.route('/withdraw', methods=['POST'])
+def withdraw():
+    data = request.get_json()
+    account_id = data.get('account_id')
+    amount = data.get('amount')
+
+    if not account_id or not amount or amount <= 0:
+        return jsonify({"error": "Invalid request"}), 400
+
+    with balance_lock:  # Ensure thread safety
+        session = db.session
+        try:
+            account = session.query(Account).filter_by(id=account_id).with_for_update().first()
+            if not account:
+                return jsonify({"error": "Account not found"}), 404
+            if account.balance < amount:
+                return jsonify({"account_id": account_id, "error": "Insufficient funds"}), 400
+
+            account.balance -= amount
+            session.commit()  # Save changes
+            return jsonify({
+                "account_id": account_id,
+                "message": "Withdrawal successful",
+                "new_balance": locale.currency(account.balance, grouping=True)  # Format as currency
+            })
+        except Exception as e:
+            session.rollback()
+            return jsonify({"error": "Transaction failed", "details": str(e)}), 500
+        finally:
+            session.close()
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+This is reset_balance.py
+from flask import Flask
+from api import db, Account  # Import database and Account model from api.py
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///bank.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
+
+# Reset balance within app context
+with app.app_context():
+    account = Account.query.filter_by(id="12345").first()
+    if account:
+        account.balance = 1000.00  # Reset balance to initial state
+        db.session.commit()
+        print("Balance reset to 1000.00")
+    else:
+        print("Account not found. Ensure API was initialized properly.")
+
+
+
+this is test_concurrency.py
+
+import requests
+import threading
+
+URL = "http://127.0.0.1:5000/withdraw"
+account_id = "12345"
+
+def make_request(amount):
+    response = requests.post(URL, json={"account_id": account_id, "amount": amount})
+    print(response.json())
+
+# Simulate 10 concurrent withdrawals
+threads = []
+for i in range(10):
+    t = threading.Thread(target=make_request, args=(200,))
+    threads.append(t)
+    t.start()
+
+for t in threads:
+    t.join()
+
+
+Explanation of Each of file
+1.Api.py:
+ (a)As we all know, flask is basically framework for building APIs.
+ (b) SQL Alchemy is a An ORM (Object-Relational Mapping) library for interacting with databases.
+(c) A threading lock to ensure that only one thread can modify the account balance at a time, preventing race conditions.
+(d)We have also ensure that only one thread can access the account balance at a time.
+(e) We have locks the account row for update to prevent race conditions.
+(f) Returns a JSON response with:
+o	account_id: The account ID.
+o	message: A success message.
+o	new_balance: The updated balance formatted as currency (e.g., $800.00).
+(g) We have also ensure that rolls back the transaction in case of an error.
+
+
+2.Test_concurrency.py
+(a)This script simulates 10 concurrent withdrawal requests to the      Flask API. It uses the requests library to send HTTP POST requests and the threading library to simulate multiple users making withdrawals at the same time.
+
+3.Reset_balance.py
+(a) This script is used to reset the balance of a specific account in the SQLite database (bank.db) to its initial state (1000.00). It works in conjunction with the Flask API and the Account model defined in Api.py. This is total explanation of each of file.
+
