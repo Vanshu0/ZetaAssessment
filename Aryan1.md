@@ -92,5 +92,14 @@ I selected these new reasons to highlight specific failure points in a productio
 Debugging is an **iterative process**, beginning with **log and configuration analysis**, followed by **isolation tests and comparisons**, and ending with **verification** through simulations. By introducing behavioral biometrics, we can further strengthen fraud prevention.
 
 ----------
+##### **Explanation of Approach:**
+graph TD;
+    A[User Interacts with Banking Platform] -->|Typing, Mouse, Touch Data| B(Behavioral Biometrics Engine);
+    B --> |Feature Extraction| C{User Profile Comparison};
+    C -->|Matches Normal Behavior| D[Allow Transaction];
+    C -->|Unusual Behavior Detected| E[Trigger Fraud Alert];
+    E --> F[Additional Verification Steps];
+    F -->|Pass| D;
+    F -->|Fail| G[Block Transaction & Notify User];
 
 This feature seamlessly enhances security **without disrupting the user experience**, ensuring digital banking remains secure against fraudsters.
