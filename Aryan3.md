@@ -24,16 +24,53 @@ The **Token Bucket** analogy is simple and consists of a **bucket** that holds *
 ### Diagram:
 
 ```mermaid
+
+
 graph TD;
-    A[Token Bucket] -->|Tokens added at constant rate| B[Bucket (Holds Tokens)]
-    B -->|Check if Token Available?| C{Tokens Available?}
-    C -- Yes --> D[Consume Token & Forward Request]
-    C -- No --> E[Drop Request]
-    D -->|Process Request| F[Request Allowed]
-    E -->|Reject Request| G[Request Denied]
+    
+    %% Users sending requests to Rate Limiter
+    A[Users Sending Requests] -->|User1 Request| B(Rate Limiter);
+    A -->|User2 Request| B;
+    A -->|User3 Request| B;
+    A -->|User4 Request| B;
+    
+    %% Rate Limiter checks token bucket
+    B -->|Check Token Bucket| C{Tokens Available?};
+    
+    C -- Yes --> D[Allow Request];
+    C -- No --> E[Reject Request];
 
+    D --> F[Process Request];
+    E --> G[Return 'Too Many Requests' Error];
+
+    %% Token Refill Process
+    subgraph Token Refill Mechanism
+        H[Timer/Clock] -->|At constant rate| I[Add Tokens];
+        I -->|Refill User Buckets| B1 & B2 & B3 & B4;
+    end
+
+    %% Token Buckets for Each User
+    subgraph Token Bucket for Each User
+        B1[User1 Token Bucket]
+        B2[User2 Token Bucket]
+        B3[User3 Token Bucket]
+        B4[User4 Token Bucket]
+    end
+
+    %% Rate Limiter interacts with user token buckets
+    B -->|User1| B1;
+    B -->|User2| B2;
+    B -->|User3| B3;
+    B -->|User4| B4;
+
+    %% Styling for clarity
+    style B fill:#ffcc00,stroke:#333,stroke-width:2px;
+    style C fill:#ff9999,stroke:#333,stroke-width:2px;
+    style D fill:#99ff99,stroke:#333,stroke-width:2px;
+    style E fill:#ff6666,stroke:#333,stroke-width:2px;
+    style H fill:#66ccff,stroke:#333,stroke-width:2px;
+    style I fill:#66ff99,stroke:#333,stroke-width:2px;
 ```
-
 ----------
 
 ## Leaky Bucket Algorithm
