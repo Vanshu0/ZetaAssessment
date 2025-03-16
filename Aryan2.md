@@ -1,5 +1,38 @@
 # Scalable Banking API
 
+## 1. System Architecture
+```mermaid
+graph TD
+    subgraph Client_Side
+        A[Client] -->|API Requests| B[API Gateway]
+    end
+
+    subgraph API_Layer
+        B[API Gateway] -->|Route Request| C[Accounts Service]
+        B --> D[Transaction Service]
+    end
+
+    subgraph Database_Layer
+        C -->|Fetch & Update| E[Accounts DB]
+        D -->|Process & Store| F[Transactions DB]
+    end
+
+    subgraph Caching_&_Optimization
+        C -->|Check Cache| G[Redis Cache]
+        G -->|Return Cached Balance| C
+    end
+
+    subgraph Concurrency_&_Atomicity
+        D -->|Version Check| H[Optimistic Locking]
+        H -->|Ensure Consistency| F
+    end
+
+    subgraph External_Services
+        D -->|Process Payments| I[Payment Gateway]
+    end
+  ```
+---
+
 ## Task-1
 
 ### 1. Get Account Balance (GET /accounts/{accountId}/balance)
@@ -135,7 +168,59 @@ graph TD;
     D -->|Yes| E[Return Duplicate Error];
     D -->|No| F[Proceed with Transaction];
 ```
+## **3. Consistency Mechanisms in Transactions**
 
+### **A) Strong Consistency with Atomic Transactions**
+
+Ensures **all or nothing** updates using SQL transactions.
+```json
+BEGIN TRANSACTION;
+
+-- Step 1: Check balance & version
+SELECT balance, version FROM accounts WHERE accountId = 1 FOR UPDATE;
+
+-- Step 2: Verify version
+IF current_version != expected_version THEN
+    ROLLBACK;
+    RETURN ERROR 'Version mismatch';
+END IF;
+
+-- Step 3: Update balance & increment version
+UPDATE accounts 
+SET balance = balance - 50, version = version + 1
+WHERE accountId = 1;
+
+COMMIT;
+```
+### **B) Diagram**
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API
+    participant DB
+
+    Client->>API: Request Withdraw (Amount: $50, Version: 5)
+    API->>DB: BEGIN TRANSACTION
+    API->>DB: SELECT balance, version FROM accounts WHERE accountId = 123 FOR UPDATE
+    DB-->>API: balance = $100, version = 5
+
+    API->>DB: IF (balance < amount) THEN ROLLBACK
+    DB-->>API: Success (Balance sufficient)
+
+    API->>DB: IF (version != expectedVersion) THEN ROLLBACK
+    DB-->>API: Success (Version matches)
+
+    API->>DB: UPDATE accounts SET balance = balance - 50, version = version + 1 WHERE accountId = 123
+    API->>DB: INSERT INTO transactions (accountId, type, amount, timestamp)
+
+    API->>DB: COMMIT TRANSACTION
+    DB-->>API: Success
+
+    API-->>Client: Withdrawal Successful (New Balance: $50, New Version: 6)
+
+    Note over API, DB: If any step fails → ROLLBACK transaction
+
+```
 
 ## Database Schema
 
@@ -161,7 +246,31 @@ CREATE TABLE transactions (
 );
 
 ```
+### Diagram:
 
+```mermaid
+classDiagram
+    class ACCOUNTS {
+        <<Table>>
+        +int account_id PK
+        +decimal balance
+        +int version
+        +timestamp created_at
+    }
+
+    class TRANSACTIONS {
+        <<Table>>
+        +int transaction_id PK
+        +int account_id FK
+        +varchar type
+        +decimal amount
+        +timestamp timestamp
+        +varchar idempotency_key
+    }
+
+    ACCOUNTS "1" -- "many" TRANSACTIONS : "account_id"
+
+```
 ## Race Conditions & Optimizations
 
 -   **Version mismatch check** prevents outdated balance updates.
@@ -191,6 +300,114 @@ CREATE TABLE transactions (
 -   **Event-Driven Architecture**: Use Kafka or RabbitMQ for processing transactions asynchronously.
 
 ## API Implementation
+
+# Bank Withdrawal API with Concurrency Handling
+
+## `api.py`
+```python
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+import threading
+import locale
+
+locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+
+app = Flask(__name__)
+
+# Database configuration (SQLite for simplicity, can be replaced with PostgreSQL/MySQL)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///bank.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+balance_lock = threading.Lock()
+
+class Account(db.Model):
+    id = db.Column(db.String(10), primary_key=True)
+    balance = db.Column(db.Float, nullable=False, default=1000.00)
+
+with app.app_context():
+    db.create_all()
+    if not Account.query.filter_by(id="12345").first():
+        db.session.add(Account(id="12345", balance=1000.00))
+        db.session.commit()
+
+@app.route('/withdraw', methods=['POST'])
+def withdraw():
+    data = request.get_json()
+    account_id = data.get('account_id')
+    amount = data.get('amount')
+
+    if not account_id or not amount or amount <= 0:
+        return jsonify({"error": "Invalid request"}), 400
+
+    with balance_lock:  # Ensure thread safety
+        session = db.session
+        try:
+            account = session.query(Account).filter_by(id=account_id).with_for_update().first()
+            if not account:
+                return jsonify({"error": "Account not found"}), 404
+            if account.balance < amount:
+                return jsonify({"account_id": account_id, "error": "Insufficient funds"}), 400
+
+            account.balance -= amount
+            session.commit()  # Save changes
+            return jsonify({
+                "account_id": account_id,
+                "message": "Withdrawal successful",
+                "new_balance": locale.currency(account.balance, grouping=True)  # Format as currency
+            })
+        except Exception as e:
+            session.rollback()
+            return jsonify({"error": "Transaction failed", "details": str(e)}), 500
+        finally:
+            session.close()
+
+if __name__ == '__main__':
+    app.run(debug=True)
+```
+## `reset_balance.py`
+```mermoid
+from flask import Flask
+from api import db, Account  # Import database and Account model from api.py
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///bank.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
+
+# Reset balance within app context
+with app.app_context():
+    account = Account.query.filter_by(id="12345").first()
+    if account:
+        account.balance = 1000.00  # Reset balance to initial state
+        db.session.commit()
+        print("Balance reset to 1000.00")
+    else:
+        print("Account not found. Ensure API was initialized properly.")
+
+```
+## `test_concurrency.py`
+```mermoid
+import requests
+import threading
+
+URL = "http://127.0.0.1:5000/withdraw"
+account_id = "12345"
+
+def make_request(amount):
+    response = requests.post(URL, json={"account_id": account_id, "amount": amount})
+    print(response.json())
+
+# Simulate 10 concurrent withdrawals
+threads = []
+for i in range(10):
+    t = threading.Thread(target=make_request, args=(200,))
+    threads.append(t)
+    t.start()
+
+for t in threads:
+    t.join()
+
+```
 
 ### api.py
 
