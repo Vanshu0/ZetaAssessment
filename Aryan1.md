@@ -12,7 +12,7 @@ A bug in the feature engineering pipeline (e.g., processing transaction history,
 
 #### (b) API Latency and Accuracy Drop
 
-The system depends on an external service, like a geolocation API or device fingerprinting service, which, after deployment, began to provide slower or less accurate responses due to its own issues, affecting both latency and accuracy.
+The system depends on an external service, like a geolocation API or device fingerprinting service, which, after deployment, began to provide slower or less accurate responses due to its own issues like Network Issues, affecting both latency and accuracy.
 
 #### (c) Overzealous Caching or Stale Data
 
