@@ -93,6 +93,8 @@ Debugging is an **iterative process**, beginning with **log and configuration an
 
 ----------
 ##### **Explanation of Approach:**
+```mermaid
+
 graph TD;
     A[User Interacts with Banking Platform] -->|Typing, Mouse, Touch Data| B(Behavioral Biometrics Engine);
     B --> |Feature Extraction| C{User Profile Comparison};
@@ -101,5 +103,6 @@ graph TD;
     E --> F[Additional Verification Steps];
     F -->|Pass| D;
     F -->|Fail| G[Block Transaction & Notify User];
+```
 
 This feature seamlessly enhances security **without disrupting the user experience**, ensuring digital banking remains secure against fraudsters.
