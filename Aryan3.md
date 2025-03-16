@@ -71,6 +71,17 @@ graph TD;
     style H fill:#66ccff,stroke:#333,stroke-width:2px;
     style I fill:#66ff99,stroke:#333,stroke-width:2px;
 ```
+
+```mermaid 
+graph TD;
+    A[Token Bucket] -->|Tokens added at a constant rate| B[Bucket Stores Tokens]
+    B -->|Check if token is available?| C{Token Available?}
+    C -- Yes --> D[Consume Token & Forward Request]
+    C -- No --> E[Drop Request]
+    D -->|Process Request| F[Request Allowed]
+    E -->|Reject Request| G[Request Denied]
+```
+
 ----------
 
 ## Leaky Bucket Algorithm
@@ -93,16 +104,18 @@ The **Leaky Bucket** algorithm controls congestion by sending packets at a **con
 ### Diagram:
 
 ```mermaid
-graph TD;
-    A[Leaky Bucket] -->|Packets Arrive Randomly| B[Bucket (Stores Packets)]
-    B -->|Packets Sent at Constant Rate| C[Transmit Packet]
-    B -->|Bucket Full?| D{Overflow?}
-    D -- Yes --> E[Drop Packet]
-    D -- No --> C
 
+graph TD;
+    A[Incoming Requests] -->|Bursty Traffic| B[Bucket - Queue];
+    B -->|Check if Bucket Full?| C{Bucket Full?};
+    C --No--> D[Queue Request];
+    C --Yes--> E[Drop Request];
+    D -->|Leak at Constant Rate| F[Process Request];
+    F --> G[Request Sent to Network];
 ```
 
-----------
+-----
+
 
 ## Token Bucket Algorithm Implementation (Java)
 
@@ -222,45 +235,23 @@ Each user can make only **5 requests per second**, and excess requests are **den
 
 ## **Trade-Off: Token Bucket vs. Leaky Bucket**
 
-Feature
-
-Token Bucket
-
-Leaky Bucket
-
-**Rate Control**
-
-Allows bursts
-
-Smoothens traffic
-
-**Latency**
-
-Lower
-
-Higher
-
-**Implementation**
-
-Easier
-
-More complex
-
-**Traffic Handling**
-
-Handles bursts well
-
-Enforces strict rate
-
-**Request Denial**
-
-When empty
-
-When full
 
 ### **When to Use Which?**
+``` mermaid
+graph TB;
+    A[Rate Limiting Algorithms] --> B[Token Bucket];
+    A --> C[Leaky Bucket];
 
--   **Use Token Bucket** when allowing bursts (e.g., API requests, network throttling).
--   **Use Leaky Bucket** when traffic needs to be **evenly spread** (e.g., VoIP, streaming services).
+    B --> D[Allows Bursty Traffic];
+    B --> E[Denies Request Only When Empty];
+    B --> F[Lower Latency];
+    B --> G[Simpler Implementation];
+
+    C --> H[Smoothens Traffic Flow];
+    C --> I[Denies Request When Full];
+    C --> J[Higher Latency];
+    C --> K[More Complex Implementation];
+
+```
 
 ----------
