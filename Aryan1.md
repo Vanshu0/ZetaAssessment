@@ -156,5 +156,51 @@ graph TD;
     G --> H[Update Model for Future Detection];
 
 ```
+-------
 
-This feature seamlessly enhances security **without disrupting the user experience**, while model drift detection ensures fraud prevention stays effective over time.
+### **Fraud Detection & Optimization with Existing Infrastructure**
+
+##### **Challenges:**
+
+Even with limited system resources, fraud detection can be optimized by utilizing efficient computation methods.
+
+##### **Solutions:**
+
+1.  **Efficient Feature Engineering:**
+    
+    -   Use **rule-based heuristics** and anomaly detection for lightweight fraud detection.
+    -   Precompute fraud risk scores and cache results.
+2.  **Real-Time & Asynchronous Processing:**
+    
+    -   Perform **edge computing** for behavioral biometrics on the client-side.
+    -   Implement **batch fraud scoring** instead of per-transaction scoring.
+3.  **Model Compression & Distillation:**
+    
+    -   Use **quantized models** to reduce computation load.
+    -   Apply **distilled models** to mimic deep learning with smaller models.
+4.  **Cached & Heuristic-Based Risk Scoring:**
+    
+    -   Store fraud scores in a cache for quick retrieval.
+    -   Run ML models only for high-risk transactions.
+5.  **Distributed Processing:**
+    
+    -   Break down fraud detection into **microservices** for scalability.
+    -   Use **message queues** like RabbitMQ for asynchronous processing.
+
+##### **Diagram:**
+
+```mermaid
+graph TD;
+    A[User Transaction] -->|Rule-Based Heuristics| B[Low-Risk -> Auto Approve];
+    A -->|Anomaly Detected| C{High-Risk Transaction};
+    C -->|Check Cache| D[Cached Risk Score];
+    D -->|Low Risk| B;
+    D -->|High Risk| E[Run ML Model];
+    E -->|Fraud Likely| F[Trigger Alert & Verification];
+    E -->|Safe| B;
+
+```
+
+This ensures fraud detection is **optimized without straining system resources**, improving speed and accuracy.
+
+----------
