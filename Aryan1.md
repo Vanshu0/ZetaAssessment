@@ -105,4 +105,55 @@ graph TD;
     F -->|Fail| G[Block Transaction & Notify User];
 ```
 
-This feature seamlessly enhances security **without disrupting the user experience**, ensuring digital banking remains secure against fraudsters.
+------
+### **Model Drift Monitoring and Adaptation**
+
+##### **Problem:**
+Model drift happens when the predictive capability of a model  deteriorates  over  time  because  of  changes in the real  world, e.g.,  changing  fraud patterns. There are two forms of model drift:  
+  
+1. **Concept Drift:** The mapping between features and fraud labels shifts, rendering  historical fraud patterns irrelevant.  
+2. **Data Drift:** The distribution of input features shifts  because  of user behavior changes or external influences.  
+  
+##### **Causes of Model Drift:**  
+  
+- Shifts in the online  space, including  emerging  fraud methods.  
+- Trends  in user behavior and transaction flows that change over time.  
+- Exogenous events (e.g., a pandemic changing  consumer  behavior).  
+  
+##### **Drift Detection Methods:**  
+  
+1. **Continuous Evaluation:** Regularly compare model performance on newly annotated test data.  
+2. **Population Stability Index (PSI):** Calculate distribution shifts; values > 0.2 show significant drift.  
+3. **Z-Score Analysis:** Detect statistical changes in feature distributions; a z-score beyond ±3 signals potential drift.  
+  
+##### **Automated Model Updates:**  
+  
+- **Monitoring Pipelines:** Set up alerts for drift detection using predefined thresholds.  
+- **Automated Retraining:** Implement a retraining pipeline that updates models when drift is detected.  
+- **Feedback Loop:** Incorporate user feedback from flagged fraudulent transactions to refine the model.  
+- **Adaptive Deployment:** Dynamically  utilize ensemble learning to blend  previous and new models.  
+  
+##### **Impact:**  
+  
+- Keeps  the fraud detection effective against changing threats.  
+- Minimizes false negatives due  to  aged models.  
+- Increases system robustness against adversarial fraud tactics.  
+  
+----------
+##### **Explanation of Approach:**
+
+```mermaid
+
+graph TD;
+    A[User Interacts with Banking Platform] -->|Typing, Mouse, Touch Data| B(Behavioral Biometrics Engine);
+    B --> |Feature Extraction| C{User Profile Comparison};
+    C -->|Matches Normal Behavior| D[Allow Transaction];
+    C -->|Unusual Behavior Detected| E[Trigger Fraud Alert];
+    E --> F[Additional Verification Steps];
+    F -->|Pass| D;
+    F -->|Fail| G[Block Transaction & Notify User];
+    G --> H[Update Model for Future Detection];
+
+```
+
+This feature seamlessly enhances security **without disrupting the user experience**, while model drift detection ensures fraud prevention stays effective over time.
